@@ -14,7 +14,9 @@
 long debounceTime = 0;
 long code_timeout = 0;
 
-int flag_armed = 0;
+volatile int flag_armed = 0;
+volatile int flag_boton = 0;
+volatile int flag_presence = 0;
 
 int code_pass [] = {1,2,3};
 int code [3] = {0,0,0};
@@ -80,19 +82,15 @@ enum fsm_state {
 
 
 int presencia (fsm_t *this) {
-  if(GPIO_INPUT_GET(GPIO_PRESENCE)){
+  if(flag_presence){
     printf("Detectada presencia\n");
     return 1;
   }
   return 0;
 };
+
 int alarm_on(fsm_t *this){
   return(flag_armed);
-
-};
-int alarm_off(fsm_t *this){
-  return(!flag_armed);
-
 };
 
 void alarm_sound(fsm_t *this){
@@ -104,26 +102,18 @@ void alarm_sound(fsm_t *this){
 void alarm_shut(fsm_t *this){
   printf("Silenciando alarma\n");
   GPIO_OUTPUT_SET(GPIO_LED, 1);
+  flag_armed = 0;
 
 };
 static fsm_trans_t alarma[] = {
   {DESARMADO,alarm_on,ARMADO,alarm_shut},
-  {ARMADO, alarm_off, DESARMADO, alarm_shut},
+  {ARMADO, alarm_on, DESARMADO, alarm_shut},
   {ARMADO, presencia, ARMADO, alarm_sound},
   {-1, NULL, -1, NULL }
 };
 
 int button_pressed (fsm_t *this){
-  if(GPIO_INPUT_GET(GPIO_PRESENCE)){
-    if(xTaskGetTickCount()*portTICK_RATE_MS > debounceTime){
-      debounceTime = xTaskGetTickCount()*portTICK_RATE_MS + 180;
-      code_timeout = xTaskGetTickCount()*portTICK_RATE_MS + 1000;
-      return 1;
-    } else {
-      return 0;
-    }
-  }
-  return 0;
+  return (flag_boton);
 };
 
 int timeout (fsm_t *this) {
@@ -149,11 +139,7 @@ void num_add (fsm_t *this){
 
 void alarm_arm (fsm_t *this) {
   if(code == code_pass){
-    flag_armed = !flag_armed;
-    if(flag_armed){
-      printf("Alarma armada\n");
-    }else {
-      printf("Alarma desarmada\n");
+    flag_armed = 1;
     }
   }
   int j;
@@ -164,33 +150,26 @@ void alarm_arm (fsm_t *this) {
   indice = 0;
   printf("Codigo reseteado\n");
 }
-static fsm_trans_t codigo[] = {
-  {IDLE,button_pressed,NUM1_WRITE,NULL},
-  {NUM1_WRITE,button_pressed,NUM1_WRITE,num_add},
-  {NUM1_WRITE,timeout,WAIT2,num_save},
-  {WAIT2,button_pressed,NUM2_WRITE,NULL},
-  {NUM2_WRITE,button_pressed,NUM2_WRITE,num_add},
-  {NUM2_WRITE,timeout,WAIT3,num_save},
-  {WAIT3,button_pressed,NUM3_WRITE,NULL},
-  {NUM3_WRITE,button_pressed,NUM3_WRITE,num_add},
-  {NUM3_WRITE,timeout,CODE_CHECK,num_save},
-  {CODE_CHECK,button_pressed,IDLE,alarm_arm},
-  {-1, NULL, -1, NULL }
-};
+
+//Quitar rebotes
+void isr_gpio (void* arg){
+  if(xTaskGetTickCount()*portTICK_RATE_MS > debounceTime){
+    uint32 status = GPIO_REG_READ(GPIO_STATUS_ADDRESS);
+    if(status & BIT(0)){ //Mirar que bit indica el gpio que ha generado interrupcion
+      /**-------*/
+    }
+    debounceTime = xTaskGetTickCount()*portTICK_RATE_MS + 180;
+  }
+}
 
 void alarm(void* ignore)
 {
     fsm_t* fsm1 = fsm_new(alarma);
-    fsm_t* fsm2 = fsm_new(codigo);
     alarm_shut(fsm1);
-    alarm_arm(fsm2);
     portTickType xLastWakeTime;
-
     while(true) {
       xLastWakeTime = xTaskGetTickCount ();
       fsm_fire(fsm1);
-      fsm_fire(fsm2);
-      printf("FSM Alarma: %d\nFSM Codigo: %d\n", fsm1->current_state, fsm2->current_state);
       vTaskDelayUntil(&xLastWakeTime, PERIOD_TICK);
     }
 }
