@@ -12,8 +12,8 @@
 #define PERIOD_TICK 200/portTICK_RATE_MS
 
 #define GPIO_LED 2
-#define GPIO_CODE 15
-#define GPIO_PRESENCE 0
+#define GPIO_CODE 13
+#define GPIO_PRESENCE 4
 
 long debounceTime = 0;
 long code_next_timeout = 0;
@@ -22,7 +22,7 @@ volatile int flag_boton = 0;
 volatile int flag_presence = 0;
 
 int code_pass [] = {1,2,3};
-int code [3] = {0,0,0};
+int code [3] = {-1,-1,-1};
 int indice = 0;
 int num = 0;
 
@@ -95,13 +95,19 @@ int codigo_correcto(fsm_t* this){
     int j;
     int correcto = 1;
     for(j = 0; j < 3; j++){
-      correcto = correcto && (code[j] == code_pass[j]);
+      if(code[j] != code_pass[j]){
+        correcto = 0;
+      }
     }
-    code[0] = 0;
-    code[1] = 0;
-    code[2] = 0;
+    code[0] = -1;
+    code[1] = -1;
+    code[2] = -1;
+    if(correcto){
+      printf("Codigo correcto!\n");
+    }
     return correcto;
   }
+  return 0;
 }
 
 int codigo_incorrecto(fsm_t* this){
@@ -109,13 +115,19 @@ int codigo_incorrecto(fsm_t* this){
     int j;
     int correcto = 1;
     for(j = 0; j < 3; j++){
-      correcto = correcto && (code[j] == code_pass[j]);
+      if(code[j] != code_pass[j]){
+        correcto = 0;
+      }
     }
-    code[0] = 0;
-    code[1] = 0;
-    code[2] = 0;
+    code[0] = -1;
+    code[1] = -1;
+    code[2] = -1;
+    if(!correcto){
+      printf("Codigo erroneo!\n");
+    }
     return !correcto;
   }
+  return 0;
 }
 int presencia (fsm_t *this) {
   if(flag_presence){
@@ -133,17 +145,16 @@ void update_code (fsm_t* this){
 
 void next_index(fsm_t* this){
   code_next_timeout = 0;
-  if(indice > 2){
-    indice = 0;
-    return;
-  }
-  printf("Indice: %d\nCodigo: [%d,%d,%d]\n", indice, code[0], code[1], code[2]);
+  printf("Indice: %d -> %d\nCodigo: [%d,%d,%d]\n", indice, (indice + 1), code[0], code[1], code[2]);
   indice++;
 }
 
 void limpiar_flag(fsm_t* this){
   flag_boton = 0;
   flag_presence = 0;
+  if(indice > 2){
+    indice = 0;
+  }
 }
 void alarm_sound(fsm_t *this){
   printf("Sonando alarma\n");
@@ -153,6 +164,9 @@ void alarm_sound(fsm_t *this){
 void alarm_shut(fsm_t *this){
   printf("Silenciando alarma\n");
   GPIO_OUTPUT_SET(GPIO_LED, 1);
+  if(indice > 2){
+    indice = 0;
+  }
 };
 static fsm_trans_t alarma[] = {
   {DESARMADO, codigo_correcto, ARMADO, limpiar_flag},
@@ -180,6 +194,7 @@ void isr_gpio (void* arg){
   uint32 status = GPIO_REG_READ(GPIO_STATUS_ADDRESS);
   if(xTaskGetTickCount()*portTICK_RATE_MS > debounceTime){
     if(status & BIT(GPIO_CODE)){
+      printf("Detectada pulsacion de codigo\n");
       flag_boton = 1;
     }
     debounceTime = xTaskGetTickCount()*portTICK_RATE_MS + 180;
@@ -196,8 +211,24 @@ void alarm(void* ignore)
     alarm_shut(fsm1);
     portTickType xLastWakeTime;
     gpio_intr_handler_register((void*)isr_gpio, NULL);
-    gpio_pin_intr_state_set(GPIO_PRESENCE, GPIO_PIN_INTR_POSEDGE);//Pull-Up, conectar a GND
-    gpio_pin_intr_state_set(GPIO_CODE, GPIO_PIN_INTR_NEGEDGE);//Pull-Down, conectar a 3.3V
+
+    //gpio_pin_intr_state_set(GPIO_PRESENCE, GPIO_PIN_INTR_POSEDGE);//Pull-Up, conectar a GND
+    //gpio_pin_intr_state_set(GPIO_CODE, GPIO_PIN_INTR_POSEDGE);//Pull-Down, conectar a 3.3V
+
+    GPIO_ConfigTypeDef io_conf;
+    io_conf.GPIO_IntrType = GPIO_PIN_INTR_POSEDGE;
+    io_conf.GPIO_Mode = GPIO_Mode_Input;
+    io_conf.GPIO_Pin = BIT(GPIO_CODE);
+    io_conf.GPIO_Pullup = GPIO_PullUp_EN;
+    gpio_config(&io_conf);
+
+    GPIO_ConfigTypeDef io_conf2;
+    io_conf2.GPIO_IntrType = GPIO_PIN_INTR_POSEDGE;
+    io_conf2.GPIO_Mode = GPIO_Mode_Input;
+    io_conf2.GPIO_Pin = BIT(GPIO_PRESENCE);
+    io_conf2.GPIO_Pullup = GPIO_PullUp_EN;
+    gpio_config(&io_conf2);
+
     ETS_GPIO_INTR_ENABLE();
     while(true) {
       xLastWakeTime = xTaskGetTickCount ();
