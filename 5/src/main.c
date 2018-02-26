@@ -6,7 +6,7 @@
 
 #define PERIOD_TICK 100/portTICK_RATE_MS
 
-long debounceTime = 0;
+long light_debounceTime = 0;
 long timeout_time = 0;
 
 /******************************************************************************
