@@ -1,0 +1,26 @@
+never spec {    /* !(((([] ((! ((seccion==0))) || (<> ((state==OFF))))) && ([] ((! (((state==CARGA)) && (carga_aum))) || (<> ((state==ABRIR_SECCION)))))) && ([] ((! (((state==CARGA)) && (carga_dis))) || (<> ((state==CERRAR_SECCION)))))) && ([] ((! ((((state==CARGA)) && (! (carga_dis))) && (! (carga_aum)))) || (<> ((state==CARGA)))))) */
+T0_init:
+	do
+	:: (! ((! ((seccion==0)))) && ! (((state==OFF))) && ((! ((! ((((state==CARGA)) && (! (carga_dis))) && (! (carga_aum)))))) || (((! ((! (((state==CARGA)) && (carga_aum))))) || (((! ((! (((state==CARGA)) && (carga_dis))))) || (! ((! ((seccion==0))))))))))) -> goto accept_S7
+	:: (! ((! (((state==CARGA)) && (carga_dis)))) && ! (((state==CERRAR_SECCION))) && ((! ((! ((((state==CARGA)) && (! (carga_dis))) && (! (carga_aum)))))) || (((! ((! (((state==CARGA)) && (carga_aum))))) || (((! ((! (((state==CARGA)) && (carga_dis))))) || (! ((! ((seccion==0))))))))))) -> goto accept_S12
+	:: (! ((! ((((state==CARGA)) && (! (carga_dis))) && (! (carga_aum))))) && ! (((state==CARGA)))) -> goto accept_S17
+	:: (! ((! (((state==CARGA)) && (carga_aum)))) && ! (((state==ABRIR_SECCION)))) -> goto accept_S22
+	:: (1) -> goto T0_init
+	od;
+accept_S7:
+	do
+	:: (! (((state==OFF)))) -> goto accept_S7
+	od;
+accept_S12:
+	do
+	:: (! (((state==CERRAR_SECCION)))) -> goto accept_S12
+	od;
+accept_S17:
+	do
+	:: (! (((state==CARGA)))) -> goto accept_S17
+	od;
+accept_S22:
+	do
+	:: (! (((state==ABRIR_SECCION)))) -> goto accept_S22
+	od;
+}
